@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Everyone Chat</title>
+  <style>
+    :root {
+      --bg1: #0ea5e9; --bg2: #9333ea; --panel: #ffffff; --text: #111827;
+      --muted: #6b7280; --border: #e5e7eb; --primary: #2563eb; --primary-600: #1d4ed8;
+      --danger: #dc2626; --success: #16a34a; --me: #e0edff; --other: #f3f4f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; color: var(--text);
+      font: 16px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      min-height: 100vh; background: linear-gradient(135deg, var(--bg1), var(--bg2)) fixed;
+      display: grid; grid-template-rows: auto 1fr;
+    }
+    header { color: #fff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; }
+    header .brand { font-weight: 700; letter-spacing: 0.3px; }
+    header .user { opacity: 0.9; font-size: 14px; }
+    main { display: grid; place-items: center; padding: 18px; }
+    .shell { width: 100%; max-width: 980px; display: grid; gap: 14px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+    h2 { margin: 0 0 10px 0; } p { margin: 0 0 10px 0; color: var(--muted); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    label { font-size: 13px; color: #374151; }
+    input, button { padding: 12px 12px; border-radius: 10px; border: 1px solid var(--border); }
+    input { width: 100%; background: #fff; }
+    button { background: var(--primary); color: #fff; border-color: var(--primary); cursor: pointer; font-weight: 600; }
+    button:hover { background: var(--primary-600); border-color: var(--primary-600); }
+    button.secondary { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+    button.ghost { background: transparent; border: 1px dashed var(--border); color: var(--muted); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); } .error { color: var(--danger); font-size: 13px; } .success { color: var(--success); font-size: 13px; }
+    .tabs { display: flex; gap: 8px; } .tab { border: 1px solid var(--border); padding: 8px 12px; border-radius: 999px; background: #fff; color: var(--text); cursor: pointer; font-weight: 600; }
+    .tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .hidden { display: none !important; }
+    #chatView { display: grid; grid-template-rows: auto 1fr auto; gap: 10px; height: calc(100vh - 180px); }
+    #messages { padding: 12px; overflow-y: auto; background: #fafafa; border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .bubble { max-width: 75%; padding: 10px 12px; border-radius: 12px; display: inline-block; word-wrap: break-word; white-space: pre-wrap; }
+    .mine { align-self: flex-end; background: var(--me); } .other { align-self: flex-start; background: var(--other); }
+    .meta { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+    .recaptcha-box { padding: 6px; border: 1px dashed var(--border); border-radius: 10px; background: #fff; }
+    .top-actions { display: flex; justify-content: space-between; align-items: center; }
+    .title { font-weight: 700; } .sep { height: 1px; background: var(--border); margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Everyone Chat</div>
+    <div id="userBadge" class="user"></div>
+  </header>
+
+  <main>
+    <div class="shell">
+      <!-- Welcome -->
+      <section id="welcomePanel" class="panel">
+        <div class="top-actions">
+          <div class="title">Welcome</div>
+          <div class="tabs">
+            <button id="tabSignup" class="tab active" type="button">Create account</button>
+            <button id="tabLogin" class="tab" type="button">Log in</button>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div id="welcomeSignup">
+          <h2>Create account</h2>
+          <p>We’ll verify your phone with an OTP first.</p>
+          <div class="actions" style="margin-top:10px;">
+            <button id="btnStartSignup">Start signup</button>
+          </div>
+        </div>
+        <div id="welcomeLogin" class="hidden">
+          <h2>Log in</h2>
+          <p>Already verified your phone? Log in with your phone number and password.</p>
+          <div class="actions" style="margin-top:10px;">
+            <button id="btnOpenLogin" class="secondary">Go to login</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- OTP -->
+      <section id="otpPanel" class="panel hidden">
+        <div class="top-actions">
+          <div class="title">Verify your phone</div>
+          <button id="backFromOtp" class="ghost" type="button">Back</button>
+        </div>
+        <div class="sep"></div>
+        <div class="row">
+          <div>
+            <label>Phone number (with country code)</label>
+            <input id="otp_phone" type="tel" placeholder="+15551234567" />
+            <div class="hint">Example: +91XXXXXXXXXX (India), +1XXXXXXXXXX (USA)</div>
+          </div>
+          <div>
+            <label>reCAPTCHA</label>
+            <div class="recaptcha-box"><div id="recaptcha-container"></div></div>
+            <div class="hint">If reCAPTCHA fails, reload the page.</div>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:10px;">
+          <button id="sendOtpBtn" type="button">Send OTP</button>
+          <span id="otpStatus" class="hint"></span>
+        </div>
+        <div id="otpEntry" class="hidden" style="margin-top:10px;">
+          <div class="row">
+            <div>
+              <label>Enter 6-digit OTP</label>
+              <input id="otp_code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <div class="actions">
+                <button id="resendOtpBtn" class="secondary" type="button">Resend OTP</button>
+                <span id="resendCountdown" class="hint"></span>
+              </div>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:10px;">
+            <button id="verifyOtpBtn" type="button">Verify OTP</button>
+          </div>
+        </div>
+        <div class="error" id="otp_error"></div>
+        <div class="success" id="otp_success"></div>
+      </section>
+
+      <!-- Details -->
+      <section id="detailsPanel" class="panel hidden">
+        <div class="top-actions">
+          <div class="title">Create account</div>
+          <button id="backFromDetails" class="ghost" type="button">Back</button>
+        </div>
+        <div class="sep"></div>
+        <form id="signupForm" novalidate>
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input id="su_name" type="text" maxlength="50" />
+            </div>
+            <div>
+              <label>Username</label>
+              <input id="su_username" type="text" maxlength="20" placeholder="letters, numbers, _" />
+              <div class="hint">3–20 letters/digits/underscore (unique)</div>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>E‑mail</label>
+              <input id="su_email" type="email" maxlength="100" placeholder="you@example.com" />
+            </div>
+            <div>
+              <label>Create password</label>
+              <input id="su_pass" type="password" />
+              <div class="hint">8+ chars, include a letter, number, and a symbol</div>
+            </div>
+          </div>
+          <div>
+            <label>Confirm password</label>
+            <input id="su_pass2" type="password" />
+          </div>
+          <div class="error" id="su_error"></div>
+          <div class="success" id="su_success"></div>
+          <div class="actions" style="margin-top:10px;">
+            <button type="submit">Finish signup</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Login -->
+      <section id="loginPanel" class="panel hidden">
+        <div class="top-actions">
+          <div class="title">Log in</div>
+          <button id="backFromLogin" class="ghost" type="button">Back</button>
+        </div>
+        <div class="sep"></div>
+        <form id="loginForm" novalidate>
+          <div class="row">
+            <div>
+              <label>Phone number</label>
+              <input id="li_phone" type="tel" placeholder="+15551234567" />
+            </div>
+            <div>
+              <label>Password</label>
+              <input id="li_pass" type="password" />
+            </div>
+          </div>
+          <div class="error" id="li_error"></div>
+          <div class="actions" style="margin-top:10px;">
+            <button type="submit">Log in</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Chat -->
+      <section id="chatPanel" class="panel hidden">
+        <div class="top-actions">
+          <div class="title">Global chat</div>
+          <div class="actions">
+            <span class="hint">Signed in as <b id="userName"></b> (@<span id="userUsername"></span>)</span>
+            <button id="logoutBtn" class="secondary" type="button">Log out</button>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div id="chatView">
+          <div id="messages" aria-live="polite"></div>
+          <form id="sendForm">
+            <div class="row">
+              <input id="msgInput" type="text" placeholder="Write a message…" maxlength="500" autocomplete="off" />
+              <button type="submit">Send</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    // Firebase SDKs (CDN)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
+      RecaptchaVerifier, signInWithPhoneNumber, EmailAuthProvider,
+      linkWithCredential, updateProfile
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import {
+      getDatabase, ref, set, update, push, onChildAdded,
+      query, limitToLast, orderByChild, serverTimestamp, get
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDJ7ZBb8RvIze8ZrFaot_UUvaUi7QRIv28",
+      authDomain: "chat-95e39.firebaseapp.com",
+      databaseURL: "https://chat-95e39-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "chat-95e39",
+      storageBucket: "chat-95e39.firebasestorage.app",
+      messagingSenderId: "549155354629",
+      appId: "1:549155354629:web:f53b8fd0ef529da925046c",
+      measurementId: "G-BHHW50T4TS"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    // Panels
+    const welcomePanel = document.getElementById("welcomePanel");
+    const otpPanel = document.getElementById("otpPanel");
+    const detailsPanel = document.getElementById("detailsPanel");
+    const loginPanel = document.getElementById("loginPanel");
+    const chatPanel = document.getElementById("chatPanel");
+
+    // UI
+    const tabSignup = document.getElementById("tabSignup");
+    const tabLogin = document.getElementById("tabLogin");
+    const welcomeSignup = document.getElementById("welcomeSignup");
+    const welcomeLogin = document.getElementById("welcomeLogin");
+    const btnStartSignup = document.getElementById("btnStartSignup");
+    const btnOpenLogin = document.getElementById("btnOpenLogin");
+    const backFromOtp = document.getElementById("backFromOtp");
+    const backFromDetails = document.getElementById("backFromDetails");
+    const backFromLogin = document.getElementById("backFromLogin");
+
+    const userBadge = document.getElementById("userBadge");
+    const userNameEl = document.getElementById("userName");
+    const userUsernameEl = document.getElementById("userUsername");
+
+    // OTP refs
+    const otp_phone = document.getElementById("otp_phone");
+    const sendOtpBtn = document.getElementById("sendOtpBtn");
+    const otpEntry = document.getElementById("otpEntry");
+    const otp_code = document.getElementById("otp_code");
+    const verifyOtpBtn = document.getElementById("verifyOtpBtn");
+    const resendOtpBtn = document.getElementById("resendOtpBtn");
+    const resendCountdown = document.getElementById("resendCountdown");
+    const otp_error = document.getElementById("otp_error");
+    const otp_success = document.getElementById("otp_success");
+    const otpStatus = document.getElementById("otpStatus");
+
+    // Signup refs
+    const signupForm = document.getElementById("signupForm");
+    const su_name = document.getElementById("su_name");
+    const su_username = document.getElementById("su_username");
+    const su_email = document.getElementById("su_email");
+    const su_pass = document.getElementById("su_pass");
+    const su_pass2 = document.getElementById("su_pass2");
+    const su_error = document.getElementById("su_error");
+    const su_success = document.getElementById("su_success");
+
+    // Login refs
+    const loginForm = document.getElementById("loginForm");
+    const li_phone = document.getElementById("li_phone");
+    const li_pass = document.getElementById("li_pass");
+    const li_error = document.getElementById("li_error");
+
+    // Chat refs
+    const messagesEl = document.getElementById("messages");
+    const sendForm = document.getElementById("sendForm");
+    const msgInput = document.getElementById("msgInput");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    // Helpers (no regex with "/" anywhere)
+    const passRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    function digitsOnly(s) { return String(s || "").replace(/\D/g, ""); }
+    function toE164(raw) { const d = digitsOnly(raw); return d ? `+${d}` : ""; }
+    function normalizeUsername(s) { return String(s || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, ""); }
+    function normalizeEmail(s) { return String(s || "").trim().toLowerCase(); }
+    function phoneAsEmail(phoneDigits) { return `${phoneDigits}@phone.local`; }
+    // SAFE: no regex literal with "/" — replace illegal Firebase key chars via char-by-char map
+    function emailKey(email) {
+      const bad = { ".": 1, "#": 1, "$": 1, "/": 1, "[": 1, "]": 1 };
+      const s = String(email || "").toLowerCase().trim();
+      let out = "";
+      for (let i = 0; i < s.length; i++) out += bad[s[i]] ? "_" : s[i];
+      return out;
+    }
+
+    function show(el) { el.classList.remove("hidden"); }
+    function hide(el) { el.classList.add("hidden"); }
+    function goWelcome() { show(welcomePanel); hide(otpPanel); hide(detailsPanel); hide(loginPanel); hide(chatPanel); }
+    function goOtp() { hide(welcomePanel); show(otpPanel); hide(detailsPanel); hide(loginPanel); hide(chatPanel); }
+    function goDetails() { hide(welcomePanel); hide(otpPanel); show(detailsPanel); hide(loginPanel); hide(chatPanel); }
+    function goLogin() { hide(welcomePanel); hide(otpPanel); hide(detailsPanel); show(loginPanel); hide(chatPanel); }
+    function goChat() { hide(welcomePanel); hide(otpPanel); hide(detailsPanel); hide(loginPanel); show(chatPanel); }
+
+    // Tabs + navigation
+    tabSignup.addEventListener("click", () => { tabSignup.classList.add("active"); tabLogin.classList.remove("active"); show(welcomeSignup); hide(welcomeLogin); });
+    tabLogin.addEventListener("click", () => { tabLogin.classList.add("active"); tabSignup.classList.remove("active"); show(welcomeLogin); hide(welcomeSignup); });
+    btnStartSignup.addEventListener("click", () => { goOtp(); otp_phone.focus(); });
+    btnOpenLogin.addEventListener("click", () => { goLogin(); li_phone.focus(); });
+    backFromOtp.addEventListener("click", () => { goWelcome(); });
+    backFromDetails.addEventListener("click", () => { goWelcome(); });
+    backFromLogin.addEventListener("click", () => { goWelcome(); });
+
+    // reCAPTCHA + OTP state
+    let recaptchaVerifier = null;
+    let confirmationResult = null;
+    let verifiedPhoneDigits = null;
+    let verifiedPhoneE164 = null;
+    let resendTimer = null;
+    let canResendAt = 0;
+
+    function ensureRecaptcha() {
+      if (!recaptchaVerifier) {
+        recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", { size: "normal" });
+        recaptchaVerifier.render();
+      }
+      return recaptchaVerifier;
+    }
+    function startResendCountdown(seconds = 30) {
+      canResendAt = Date.now() + seconds * 1000;
+      updateCountdown();
+      resendTimer = setInterval(updateCountdown, 500);
+    }
+    function updateCountdown() {
+      const remaining = Math.max(0, Math.ceil((canResendAt - Date.now()) / 1000));
+      resendCountdown.textContent = remaining ? `Resend in ${remaining}s` : "";
+      resendOtpBtn.disabled = remaining > 0;
+      if (!remaining && resendTimer) { clearInterval(resendTimer); resendTimer = null; }
+    }
+
+    async function checkProfileExists(uid) { const snap = await get(ref(db, `profiles/${uid}`)); return snap.exists(); }
+    async function isUsernameTaken(username) { const s = await get(ref(db, `usernameToUid/${username}`)); return s.exists(); }
+    async function isEmailTaken(email) { const s = await get(ref(db, `emailToUid/${emailKey(email)}`)); return s.exists(); }
+
+    // OTP: send
+    sendOtpBtn.addEventListener("click", async () => {
+      otp_error.textContent = ""; otp_success.textContent = ""; otpStatus.textContent = "";
+      const phoneE164 = toE164(otp_phone.value);
+      const digits = digitsOnly(otp_phone.value);
+      if (!phoneE164 || digits.length < 10 || digits.length > 15) { otp_error.textContent = "Enter a valid phone number (with country code)."; return; }
+      sendOtpBtn.disabled = true; otpStatus.textContent = "Sending OTP…";
+      try {
+        confirmationResult = await signInWithPhoneNumber(auth, phoneE164, ensureRecaptcha());
+        verifiedPhoneDigits = digits; verifiedPhoneE164 = phoneE164;
+        show(otpEntry); otp_success.textContent = "OTP sent. Check your SMS."; otpStatus.textContent = "OTP sent";
+        otp_code.focus(); startResendCountdown(30);
+      } catch (err) {
+        const code = err?.code || "";
+        if (code === "auth/too-many-requests") otp_error.textContent = "Too many requests. Wait and try again.";
+        else if (code === "auth/captcha-check-failed") otp_error.textContent = "reCAPTCHA failed. Reload and try again.";
+        else if (code === "auth/invalid-phone-number") otp_error.textContent = "Invalid phone number format.";
+        else otp_error.textContent = "Failed to send OTP. Use http://localhost or https and add your domain in Firebase Auth → Authorized domains.";
+      } finally { sendOtpBtn.disabled = false; }
+    });
+
+    // OTP: resend
+    resendOtpBtn.addEventListener("click", async () => {
+      if (!verifiedPhoneE164) return;
+      otp_error.textContent = ""; otp_success.textContent = "";
+      try {
+        confirmationResult = await signInWithPhoneNumber(auth, verifiedPhoneE164, ensureRecaptcha());
+        otp_success.textContent = "OTP re-sent."; startResendCountdown(30);
+      } catch { otp_error.textContent = "Failed to resend OTP. Please try again later."; }
+    });
+
+    // OTP: verify
+    verifyOtpBtn.addEventListener("click", async () => {
+      otp_error.textContent = ""; otp_success.textContent = "";
+      const code = (otp_code.value || "").trim();
+      if (code.length !== 6) { otp_error.textContent = "Enter the 6-digit OTP."; return; }
+      try {
+        const cred = await confirmationResult.confirm(code);
+        const uid = cred.user.uid;
+        if (await checkProfileExists(uid)) { otp_error.textContent = "This phone number is already registered. Please log in."; await signOut(auth); goLogin(); return; }
+        otp_success.textContent = "Phone verified. Continue to details."; goDetails(); su_name.focus();
+      } catch { otp_error.textContent = "Invalid OTP. Please try again."; }
+    });
+
+    // Finish signup after OTP
+    signupForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      su_error.textContent = ""; su_success.textContent = "";
+      const name = su_name.value.trim();
+      const username = normalizeUsername(su_username.value);
+      const email = normalizeEmail(su_email.value);
+      const pass = su_pass.value;
+      const pass2 = su_pass2.value;
+
+      if (!auth.currentUser) { su_error.textContent = "Session expired. Please verify phone again."; return; }
+      if (!name) return su_error.textContent = "Enter your name.";
+      if (!username || username.length < 3) return su_error.textContent = "Username must be 3–20 chars (letters, numbers, underscore).";
+      if (!email || !email.includes("@")) return su_error.textContent = "Enter a valid email address.";
+      if (!passRegex.test(pass)) return su_error.textContent = "Password must be 8+ chars and include a letter, number, and symbol.";
+      if (pass !== pass2) return su_error.textContent = "Passwords do not match.";
+
+      try {
+        if (await isUsernameTaken(username)) return su_error.textContent = "Username already taken.";
+        if (await isEmailTaken(email)) return su_error.textContent = "Email already used.";
+
+        const loginEmail = phoneAsEmail(verifiedPhoneDigits);
+        const credential = EmailAuthProvider.credential(loginEmail, pass);
+        await linkWithCredential(auth.currentUser, credential);
+        await updateProfile(auth.currentUser, { displayName: name });
+
+        const uid = auth.currentUser.uid;
+        const updates = {};
+        updates[`profiles/${uid}`] = { name, username, email, phone: verifiedPhoneDigits, createdAt: serverTimestamp() };
+        updates[`emailToUid/${emailKey(email)}`] = uid;
+        updates[`usernameToUid/${username}`] = uid;
+        await update(ref(db), updates);
+
+        su_success.textContent = "Account created. Loading chat…";
+      } catch (err) {
+        const code = err?.code || "";
+        if (code === "auth/credential-already-in-use" || code === "auth/email-already-in-use") {
+          su_error.textContent = "This phone is already linked. Try logging in.";
+        } else if (String(err?.message || "").includes("Permission denied")) {
+          su_error.textContent = "Email or username already taken. Choose another.";
+        } else {
+          su_error.textContent = "Signup failed. Please try again.";
+        }
+      }
+    });
+
+    // Login with phone + password
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      li_error.textContent = "";
+      const digits = digitsOnly(li_phone.value);
+      const pass = li_pass.value;
+      if (!digits) return li_error.textContent = "Enter your phone number.";
+      if (!pass) return li_error.textContent = "Enter your password.";
+      try {
+        await signInWithEmailAndPassword(auth, phoneAsEmail(digits), pass);
+      } catch (err) {
+        const code = err?.code || "";
+        if (code === "auth/user-not-found") li_error.textContent = "No account found for that phone number.";
+        else if (code === "auth/wrong-password") li_error.textContent = "Incorrect password.";
+        else li_error.textContent = "Login failed. Please try again.";
+      }
+    });
+
+    // Chat
+    let currentUid = null;
+    let unsub = null;
+    function addBubble({ uid, name, text, ts }) {
+      const wrap = document.createElement("div");
+      const meta = document.createElement("div");
+      const bubble = document.createElement("div");
+      const isMe = uid === currentUid;
+      wrap.style.display = "flex"; wrap.style.flexDirection = "column"; wrap.style.alignItems = isMe ? "flex-end" : "flex-start";
+      meta.className = "meta"; meta.textContent = `${isMe ? "You" : (name || "User")} • ${new Date(ts || Date.now()).toLocaleTimeString()}`;
+      bubble.className = `bubble ${isMe ? "mine" : "other"}`; bubble.textContent = text || "";
+      wrap.appendChild(meta); wrap.appendChild(bubble); messagesEl.appendChild(wrap); messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    function startMessages() {
+      messagesEl.innerHTML = "";
+      if (typeof unsub === "function") { try { unsub(); } catch {} }
+      const q = query(ref(db, "messages"), orderByChild("ts"), limitToLast(100));
+      unsub = onChildAdded(q, (snap) => { const v = snap.val() || {}; addBubble({ uid: v.uid, name: v.name, text: v.text, ts: v.ts }); });
+    }
+    function stopMessages() { if (typeof unsub === "function") { try { unsub(); } catch {} } unsub = null; }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { userBadge.textContent = ""; currentUid = null; stopMessages(); goWelcome(); return; }
+      currentUid = user.uid;
+      const profSnap = await get(ref(db, `profiles/${user.uid}`));
+      if (profSnap.exists()) {
+        const prof = profSnap.val() || {};
+        userBadge.textContent = `${prof.name || "User"} (@${prof.username || "user"})`;
+        userNameEl.textContent = prof.name || "User";
+        userUsernameEl.textContent = prof.username || "user";
+        goChat(); startMessages();
+      } else {
+        userBadge.textContent = "Phone verified — complete signup";
+        goDetails();
+      }
+    });
+
+    // Send message
+    let lastSentAt = 0;
+    sendForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const u = auth.currentUser; if (!u) return;
+      const text = (msgInput.value || "").trim().slice(0, 500); if (!text) return;
+      const now = Date.now(); if (now - lastSentAt < 600) return; lastSentAt = now;
+      const profSnap = await get(ref(db, `profiles/${u.uid}`)); const prof = profSnap.val() || {};
+      try { await set(push(ref(db, "messages")), { uid: u.uid, name: prof.name || "User", text, ts: serverTimestamp() }); msgInput.value = ""; }
+      catch { addBubble({ uid: u.uid, name: prof.name || "You", text: "Send failed. Try again.", ts: Date.now() }); }
+    });
+
+    // Logout
+    logoutBtn.addEventListener("click", async () => { await signOut(auth); messagesEl.innerHTML = ""; });
+
+    // Start
+    goWelcome();
+    if (location.protocol === "file:") { alert("Open via http://localhost or https (Phone OTP does not work on file://)."); }
+  </script>
+</body>
+</html>
